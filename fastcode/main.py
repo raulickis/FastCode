@@ -889,7 +889,7 @@ class FastCode:
                 "max_file_size_mb": 5,
                 "backup_directory": "./repo_backup",
                 "ignore_patterns": ["*.pyc", "__pycache__", "node_modules", ".git"],
-                "supported_extensions": [".py", ".js", ".ts", ".java", ".go"],
+                "supported_extensions": [".py", ".js", ".ts", ".java", ".go", ".groovy", ".gsp"],
             },
             "parser": {
                 "extract_docstrings": True,

@@ -16,26 +16,26 @@ def setup_logging(config: Dict[str, Any]) -> logging.Logger:
     log_config = config.get("logging", {})
     level = getattr(logging, log_config.get("level", "INFO"))
     format_str = log_config.get("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    
+
     # Create logs directory if it doesn't exist
     log_file = log_config.get("file", "./logs/fastcode.log")
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
-    
+
     # Configure logging
     handlers = []
     if log_config.get("console", True):
         handlers.append(logging.StreamHandler())
     if log_file:
         handlers.append(logging.FileHandler(log_file))
-    
+
     logging.basicConfig(
         level=level,
         format=format_str,
         handlers=handlers
     )
-    
+
     return logging.getLogger("fastcode")
 
 
@@ -132,7 +132,7 @@ def should_ignore_path(path: str, ignore_patterns: List[str]) -> bool:
     """Check if path should be ignored based on patterns"""
     from pathspec import PathSpec
     from pathspec.patterns import GitWildMatchPattern
-    
+
     spec = PathSpec.from_lines(GitWildMatchPattern, ignore_patterns)
     return spec.match_file(path)
 
@@ -143,7 +143,7 @@ def count_tokens(text: str, model: str = "gpt-4") -> int:
         encoding = tiktoken.encoding_for_model(model)
     except KeyError:
         encoding = tiktoken.get_encoding("cl100k_base")
-    
+
     # Some retrieved snippets may contain literal special-token strings like
     # "<|endoftext|>", which raise in tiktoken.encode by default. Allow them so
     # counting doesn't fail on the first query in non-English cases.
@@ -156,11 +156,11 @@ def truncate_to_tokens(text: str, max_tokens: int, model: str = "gpt-4") -> str:
         encoding = tiktoken.encoding_for_model(model)
     except KeyError:
         encoding = tiktoken.get_encoding("cl100k_base")
-    
+
     tokens = encoding.encode(text, disallowed_special=())
     if len(tokens) <= max_tokens:
         return text
-    
+
     truncated_tokens = tokens[:max_tokens]
     return encoding.decode(truncated_tokens)
 
@@ -180,6 +180,7 @@ def get_language_from_extension(ext: str) -> str:
         ".tsx": "typescript",
         ".java": "java",
         ".go": "go",
+        ".groovy": "groovy",
         ".cpp": "cpp",
         ".cc": "cpp",
         ".c": "c",
@@ -208,18 +209,18 @@ def get_language_from_extension(ext: str) -> str:
     return language_map.get(ext.lower(), "unknown")
 
 
-def extract_code_snippet(content: str, start_line: int, end_line: int, 
+def extract_code_snippet(content: str, start_line: int, end_line: int,
                          context_lines: int = 3) -> Dict[str, Any]:
     """Extract code snippet with context"""
     lines = content.split("\n")
     total_lines = len(lines)
-    
+
     # Calculate actual range with context
     actual_start = max(0, start_line - context_lines)
     actual_end = min(total_lines, end_line + context_lines)
-    
+
     snippet_lines = lines[actual_start:actual_end]
-    
+
     return {
         "code": "\n".join(snippet_lines),
         "start_line": actual_start + 1,  # 1-indexed
@@ -229,7 +230,7 @@ def extract_code_snippet(content: str, start_line: int, end_line: int,
     }
 
 
-def format_code_block(code: str, language: str = "", file_path: str = "", 
+def format_code_block(code: str, language: str = "", file_path: str = "",
                       start_line: Optional[int] = None) -> str:
     """Format code block for display"""
     header = f"```{language}"
@@ -237,20 +238,20 @@ def format_code_block(code: str, language: str = "", file_path: str = "",
         header += f" - {file_path}"
     if start_line:
         header += f" (Line {start_line})"
-    
+
     return f"{header}\n{code}\n```"
 
 
 def calculate_code_complexity(code: str) -> int:
     """Calculate simple cyclomatic complexity"""
     # Simple heuristic: count control flow keywords
-    keywords = ['if', 'elif', 'else', 'for', 'while', 'try', 'except', 
+    keywords = ['if', 'elif', 'else', 'for', 'while', 'try', 'except',
                 'catch', 'case', 'switch', '&&', '||', '?']
-    
+
     complexity = 1
     for keyword in keywords:
         complexity += code.count(keyword)
-    
+
     return complexity
 
 
@@ -258,20 +259,20 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[Di
     """Chunk text with sliding window"""
     words = text.split()
     chunks = []
-    
+
     for i in range(0, len(words), chunk_size - overlap):
         chunk_words = words[i:i + chunk_size]
         chunk_text = " ".join(chunk_words)
-        
+
         chunks.append({
             "text": chunk_text,
             "start_word": i,
             "end_word": i + len(chunk_words),
         })
-        
+
         if i + chunk_size >= len(words):
             break
-    
+
     return chunks
 
 
@@ -305,7 +306,7 @@ def get_repo_name_from_url(url: str) -> str:
     # Handle GitHub URLs
     if url.endswith(".git"):
         url = url[:-4]
-    
+
     parts = url.rstrip("/").split("/")
     return parts[-1] if parts else "unknown_repo"
 
@@ -314,25 +315,25 @@ def clean_docstring(docstring: str) -> str:
     """Clean and format docstring"""
     if not docstring:
         return ""
-    
+
     lines = docstring.split("\n")
     # Remove leading/trailing empty lines
     while lines and not lines[0].strip():
         lines.pop(0)
     while lines and not lines[-1].strip():
         lines.pop()
-    
+
     # Find minimum indentation
     min_indent = float('inf')
     for line in lines:
         if line.strip():
             indent = len(line) - len(line.lstrip())
             min_indent = min(min_indent, indent)
-    
+
     # Remove common indentation
     if min_indent < float('inf'):
-        lines = [line[min_indent:] if len(line) > min_indent else line 
+        lines = [line[min_indent:] if len(line) > min_indent else line
                  for line in lines]
-    
+
     return "\n".join(lines).strip()
 

@@ -92,6 +92,9 @@ class TSParser:
         elif language_name == 'go':
             import tree_sitter_go
             lang = Language(tree_sitter_go.language())
+        elif language_name == 'groovy':
+            import tree_sitter_groovy
+            lang = Language(tree_sitter_groovy.language())
         else:
             raise ValueError(f"Unsupported language: {language_name}")
 

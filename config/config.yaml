@@ -47,6 +47,8 @@ repository:
     - .html
     - .css
     - .xml
+    - .groovy
+    - .gsp
 
 # Parser Settings
 parser:

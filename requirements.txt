@@ -17,6 +17,7 @@ tree-sitter-c
 tree-sitter-cpp
 tree-sitter-rust
 tree-sitter-c-sharp
+tree-sitter-groovy
 libcst
 
 # Embeddings & Vector Store
