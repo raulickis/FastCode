@@ -8,7 +8,11 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 import libcst as cst
 import re
-from bs4 import BeautifulSoup
+import warnings
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+
+# Suprime os avisos inofensivos do BeautifulSoup ao processar tags customizadas do GSP
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 from .utils import (
     get_language_from_extension,
