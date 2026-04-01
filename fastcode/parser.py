@@ -7,6 +7,8 @@ import logging
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 import libcst as cst
+import re
+from bs4 import BeautifulSoup
 
 from .utils import (
     get_language_from_extension,
@@ -30,7 +32,7 @@ class FunctionInfo:
     class_name: Optional[str]
     decorators: List[str]
     complexity: int
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -45,7 +47,7 @@ class ClassInfo:
     bases: List[str]
     methods: List[FunctionInfo]  # <--- CHANGED: List[str] to List[FunctionInfo]
     decorators: List[str]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -75,7 +77,7 @@ class FileParseResult:
     total_lines: int
     code_lines: int
     comment_lines: int
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "file_path": self.file_path,
@@ -92,20 +94,20 @@ class FileParseResult:
 
 class CodeParser:
     """Parse code files and extract structured information"""
-    
+
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.parser_config = config.get("parser", {})
         self.logger = logging.getLogger(__name__)
-        
+
         self.extract_docstrings = self.parser_config.get("extract_docstrings", True)
         self.extract_comments = self.parser_config.get("extract_comments", True)
         self.extract_imports = self.parser_config.get("extract_imports", True)
         self.compute_complexity = self.parser_config.get("compute_complexity", True)
         self.max_function_lines = self.parser_config.get("max_function_lines", 1000)
-        
+
         # self._skipped_node_log_count = 0
-    
+
     def parse_file(self, file_path: str, content: str) -> Optional[FileParseResult]:
         """
         Parse a code file
@@ -133,25 +135,29 @@ class CodeParser:
             return self._parse_rust(file_path, content)
         elif language == "csharp":
             return self._parse_csharp(file_path, content)
+        elif language == "groovy":
+            return self._parse_groovy(file_path, content, language)
+        elif language == "gsp":
+            return self._parse_gsp(file_path, content, language)
         else:
             # For unsupported languages, return basic info
             return self._parse_generic(file_path, content, language)
-    
+
     def _fix_common_syntax_errors(self, content: str) -> str:
         """
         Fix common syntax errors in generated code.
-        
+
         Some generated files may have syntax errors like:
         - except Exception as exc as exc: (duplicate 'as' clause)
-        
+
         Args:
             content: File content that may contain syntax errors
-            
+
         Returns:
             Content with common syntax errors fixed
         """
         import re
-        
+
         # Fix duplicate 'as' clause in except statements
         # Pattern: except SomeException as var as var:
         content = re.sub(
@@ -159,28 +165,28 @@ class CodeParser:
             r'except \1 as \2:',
             content
         )
-        
+
         return content
-    
+
     def _strip_markdown_code_fences(self, content: str) -> str:
         """
         Strip markdown code fences from file content.
-        
+
         Some generated files may have ```python at the start and ``` at the end.
         This method removes these markers to allow proper parsing.
-        
+
         Args:
             content: File content that may contain markdown fences
-            
+
         Returns:
             Content with markdown fences removed
         """
         lines = content.split('\n')
-        
+
         # Check if first line is a markdown code fence (e.g., ```python, ```javascript)
         if lines and lines[0].strip().startswith('```'):
             lines = lines[1:]
-        
+
         # Remove trailing lines that are markdown fences or empty
         # Work backwards from the end to handle cases where ``` is not the last line
         while lines:
@@ -189,18 +195,18 @@ class CodeParser:
                 lines = lines[:-1]
             else:
                 break
-        
+
         return '\n'.join(lines)
 
-    
+
     def _parse_python(self, file_path: str, content: str) -> Optional[FileParseResult]:
         """Parse Python file using AST"""
         # Fix common syntax errors in generated code
         content = self._fix_common_syntax_errors(content)
-        
+
         # Strip markdown code fences if present
         content = self._strip_markdown_code_fences(content)
-        
+
         try:
             tree = ast.parse(content)
         except SyntaxError as e:
@@ -209,35 +215,35 @@ class CodeParser:
         except Exception as e:
             self.logger.error(f"Failed to parse {file_path}: {e}")
             return None
-        
+
         classes = []
         functions = []
         imports = []
         module_docstring = ast.get_docstring(tree)
-        
+
         # Extract imports
         if self.extract_imports:
             imports = self._extract_python_imports(tree)
-        
+
         # Extract classes and functions
         # for node in tree.body:
         #     if isinstance(node, ast.ClassDef):
         #         class_info = self._extract_python_class(node)
         #         if class_info:
         #             classes.append(class_info)
-            
+
         #     elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         #         func_info = self._extract_python_function(node)
         #         if func_info:
         #             functions.append(func_info)
-        
-        # # fastest version 
+
+        # # fastest version
         # for node in tree.body:
         #     if isinstance(node, ast.ClassDef):
         #         class_info = self._extract_python_class(node)
         #         if class_info:
         #             classes.append(class_info)
-            
+
         #     elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         #         func_info = self._extract_python_function(node)
         #         if func_info:
@@ -251,14 +257,14 @@ class CodeParser:
         #                     if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         #                         name = getattr(child, 'name', 'unknown')
         #                         hidden_defs.append(f"{type(child).__name__}:{name}")
-                        
+
         #                 if hidden_defs:
         #                     self.logger.warning(
         #                         f"[EDGE LOSS INVESTIGATION] In {file_path}: Skipped top-level node '{type(node).__name__}' (Line {node.lineno}). "
         #                         f"It contains {len(hidden_defs)} definitions that Code B is ignoring: {hidden_defs}"
         #                     )
         #                     self._skipped_node_log_count += 1
-                            
+
         #                     if self._skipped_node_log_count == 100:
         #                         self.logger.warning("[EDGE LOSS INVESTIGATION] Limit reached (100 logs). Further skip warnings will be suppressed.")
 
@@ -273,9 +279,9 @@ class CodeParser:
                     class_info = self._extract_python_class(node)
                     if class_info:
                         classes.append(class_info)
-                    # We do NOT drill into classes here because _extract_python_class 
+                    # We do NOT drill into classes here because _extract_python_class
                     # already handles its internal methods.
-                
+
                 # 2. Capture Function Definitions
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     # Option: Pass 'parent_scope' if you want to track nesting
@@ -285,16 +291,16 @@ class CodeParser:
                     # We do NOT drill into functions (avoiding nested functions)
                     # UNLESS you specifically want to support them like Code A did.
                     # Current logic: Top-level definitions only (including those in If/Try).
-                
+
                 # 3. Smart Drill-down (The Fix for compatibility.py)
                 elif isinstance(node, (ast.If, ast.Try, ast.With, ast.AsyncWith, ast.For, ast.While)):
                     # Drill down into the body of these blocks
                     _visit_nodes(node.body, parent_scope)
-                    
+
                     # Handle 'else' blocks for If/Try/For/While
                     if hasattr(node, 'orelse') and node.orelse:
                         _visit_nodes(node.orelse, parent_scope)
-                    
+
                     # Handle 'finalbody' for Try
                     if hasattr(node, 'finalbody') and node.finalbody:
                         _visit_nodes(node.finalbody, parent_scope)
@@ -308,7 +314,7 @@ class CodeParser:
         total_lines = len(lines)
         code_lines = sum(1 for line in lines if line.strip() and not line.strip().startswith("#"))
         comment_lines = sum(1 for line in lines if line.strip().startswith("#"))
-        
+
         return FileParseResult(
             file_path=file_path,
             language="python",
@@ -320,7 +326,7 @@ class CodeParser:
             code_lines=code_lines,
             comment_lines=comment_lines,
         )
-    
+
     def _extract_python_imports(self, tree: ast.AST) -> List[ImportInfo]:
         """Extract import statements from Python AST"""
         imports = []
@@ -348,12 +354,12 @@ class CodeParser:
                 ))
 
         return imports
-    
+
     def _extract_python_class(self, node: ast.ClassDef) -> Optional[ClassInfo]:
         """Extract class information from Python AST node"""
         try:
             docstring = ast.get_docstring(node)
-            
+
             # Extract base classes
             bases = []
             for base in node.bases:
@@ -361,7 +367,7 @@ class CodeParser:
                     bases.append(base.id)
                 elif isinstance(base, ast.Attribute):
                     bases.append(f"{base.value.id}.{base.attr}" if hasattr(base.value, 'id') else base.attr)
-            
+
             # Extract methods (FULL INFO)
             methods = []
             for item in node.body:
@@ -373,11 +379,11 @@ class CodeParser:
                         methods.append(func_info)
                     else:
                         self.logger.debug(f"[DEBUG PARSER] Found method '{item.name}' in class '{node.name}'")
-            
+
             self.logger.debug((f"[DEBUG PARSER] Class '{node.name}' extracted with {len(methods)} methods"))
             if methods:
                 self.logger.debug(f"[DEBUG PARSER] Method type: {type(methods[0])} (Should be FunctionInfo)")
-            
+
             # Extract decorators
             decorators = []
             for dec in node.decorator_list:
@@ -385,7 +391,7 @@ class CodeParser:
                     decorators.append(dec.id)
                 elif isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name):
                     decorators.append(dec.func.id)
-            
+
             return ClassInfo(
                 name=node.name,
                 start_line=node.lineno,
@@ -398,8 +404,8 @@ class CodeParser:
         except Exception as e:
             self.logger.warning(f"Failed to extract class info: {e}")
             return None
-    
-    def _extract_python_function(self, node: ast.FunctionDef, 
+
+    def _extract_python_function(self, node: ast.FunctionDef,
                                   class_name: Optional[str] = None) -> Optional[FunctionInfo]:
         """Extract function information from Python AST node"""
         try:
@@ -407,9 +413,9 @@ class CodeParser:
             if node.end_lineno and (node.end_lineno - node.lineno) > self.max_function_lines:
                 self.logger.debug(f"Skipping long function: {node.name}")
                 return None
-            
+
             docstring = ast.get_docstring(node)
-            
+
             # Extract parameters
             parameters = []
             for arg in node.args.args:
@@ -418,7 +424,7 @@ class CodeParser:
                     # Try to get type annotation
                     param_name += f": {ast.unparse(arg.annotation)}"
                 parameters.append(param_name)
-            
+
             # Extract return type
             return_type = None
             if node.returns:
@@ -426,7 +432,7 @@ class CodeParser:
                     return_type = ast.unparse(node.returns)
                 except Exception:
                     pass
-            
+
             # Extract decorators
             decorators = []
             for dec in node.decorator_list:
@@ -434,12 +440,12 @@ class CodeParser:
                     decorators.append(dec.id)
                 elif isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name):
                     decorators.append(dec.func.id)
-            
+
             # Calculate complexity
             complexity = 1
             if self.compute_complexity:
                 complexity = self._calculate_python_complexity(node)
-            
+
             return FunctionInfo(
                 name=node.name,
                 start_line=node.lineno,
@@ -456,11 +462,11 @@ class CodeParser:
         except Exception as e:
             self.logger.warning(f"Failed to extract function info: {e}")
             return None
-    
+
     def _calculate_python_complexity(self, node: ast.FunctionDef) -> int:
         """Calculate cyclomatic complexity for Python function"""
         complexity = 1
-        
+
         for child in ast.walk(node):
             if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
                 complexity += 1
@@ -468,9 +474,9 @@ class CodeParser:
                 complexity += 1
             elif isinstance(child, (ast.And, ast.Or)):
                 complexity += 1
-        
+
         return complexity
-    
+
     def _parse_javascript(self, file_path: str, content: str, language: str) -> Optional[FileParseResult]:
         """Parse JavaScript/TypeScript file using tree-sitter"""
         from .tree_sitter_parser import TSParser
@@ -1666,19 +1672,194 @@ class CodeParser:
 
         return None
 
+    def _parse_groovy(self, file_path: str, content: str, language: str) -> Optional[FileParseResult]:
+        """Parse Groovy file using tree-sitter"""
+        from .tree_sitter_parser import TSParser
+
+        content = self._strip_markdown_code_fences(content)
+
+        try:
+            ts_parser = TSParser(language='groovy')
+            tree = ts_parser.parse(content)
+            if not tree:
+                return self._parse_generic(file_path, content, language)
+
+            root_node = tree.root_node
+            classes, functions, imports = [], [], []
+            module_docstring = None
+
+            # Optional: Extract file-level docstring if needed
+            # module_docstring = self._extract_c_module_docstring(content, root_node) # Can reuse C-style comment extraction
+
+            code_bytes = content.encode('utf-8')
+
+            def visit_node(node, current_class=None):
+                # Import extraction
+                if node.type == 'import_declaration':
+                    import_text = code_bytes[node.start_byte:node.end_byte].decode('utf-8')
+                    import_text = import_text.replace('import ', '').replace(';', '').strip()
+                    imports.append(ImportInfo(module=import_text, names=['*'], is_from=False, line=node.start_point[0] + 1))
+
+                # Class extraction
+                elif node.type == 'class_declaration':
+                    name_node = node.child_by_field_name('name')
+                    class_name = code_bytes[name_node.start_byte:name_node.end_byte].decode('utf-8') if name_node else "UnknownClass"
+
+                    # Look for decorators/annotations
+                    decorators = []
+                    for child in node.children:
+                        if child.type == 'annotation':
+                            decorators.append(code_bytes[child.start_byte:child.end_byte].decode('utf-8'))
+
+                    class_info = ClassInfo(
+                        name=class_name,
+                        start_line=node.start_point[0] + 1,
+                        end_line=node.end_point[0] + 1,
+                        docstring=None,
+                        bases=[],
+                        methods=[],
+                        decorators=decorators
+                    )
+                    classes.append(class_info)
+
+                    # Traverse children keeping track of current class
+                    for child in node.children:
+                        visit_node(child, class_info)
+
+                # Method / Function extraction
+                elif node.type == 'method_declaration':
+                    name_node = node.child_by_field_name('name')
+                    func_name = code_bytes[name_node.start_byte:name_node.end_byte].decode('utf-8') if name_node else "unknownMethod"
+
+                    func_info = FunctionInfo(
+                        name=func_name,
+                        start_line=node.start_point[0] + 1,
+                        end_line=node.end_point[0] + 1,
+                        docstring=None,
+                        parameters=[],
+                        return_type=None,
+                        is_async=False,
+                        is_method=(current_class is not None),
+                        class_name=current_class.name if current_class else None,
+                        decorators=[],
+                        complexity=1
+                    )
+                    functions.append(func_info)
+                    if current_class:
+                        current_class.methods.append(func_info)
+
+                # Closures mapping (Treating as anonymous functions for RAG density)
+                elif node.type == 'closure':
+                    # Only capture substantial closures
+                    if (node.end_point[0] - node.start_point[0]) > 3:
+                        func_info = FunctionInfo(
+                            name=f"closure_L{node.start_point[0] + 1}",
+                            start_line=node.start_point[0] + 1,
+                            end_line=node.end_point[0] + 1,
+                            docstring="Groovy Closure Block",
+                            parameters=[], return_type=None, is_async=False,
+                            is_method=False, class_name=current_class.name if current_class else None,
+                            decorators=[], complexity=1
+                        )
+                        functions.append(func_info)
+
+                else:
+                    for child in node.children:
+                        visit_node(child, current_class)
+
+            visit_node(root_node)
+
+            lines = content.split("\n")
+            return FileParseResult(
+                file_path=file_path, language=language,
+                classes=classes, functions=functions, imports=imports,
+                module_docstring=module_docstring,
+                total_lines=len(lines),
+                code_lines=sum(1 for line in lines if line.strip() and not line.strip().startswith(("//", "/*"))),
+                comment_lines=sum(1 for line in lines if line.strip().startswith(("//", "/*")))
+            )
+
+        except Exception as e:
+            self.logger.warning(f"Failed to parse {file_path} with tree-sitter groovy: {e}")
+            return self._parse_generic(file_path, content, language)
+
+    def _parse_gsp(self, file_path: str, content: str, language: str) -> FileParseResult:
+        """Parse Grails Server Pages (GSP) using Hybrid Regex + BeautifulSoup Polymorphic approach"""
+        classes, functions, imports = [], [], []
+        lines = content.split('\n')
+
+        try:
+            # 1. Map Directives & Imports
+            regex_page_directive = re.compile(r'<%@\s+(.*?)\s*%>', re.IGNORECASE)
+            for directive in regex_page_directive.findall(content):
+                if "import=" in directive:
+                    match = re.search(r'import="([^"]+)"', directive)
+                    if match:
+                        imports.append(ImportInfo(module=match.group(1), names=['*'], is_from=False, line=1))
+
+            # 2. Isolate Groovy Scriptlets (<% ... %>) -> Mapped as Functions
+            regex_scriptlet = re.compile(r'<%([^=].*?)%>', re.DOTALL)
+            for script_idx, block in enumerate(regex_scriptlet.finditer(content)):
+                clean_block = block.group(1).strip()
+                if len(clean_block) >= 40:
+                    start_line = content[:block.start()].count('\n') + 1
+                    end_line = start_line + clean_block.count('\n')
+
+                    functions.append(FunctionInfo(
+                        name=f"gsp_scriptlet_{script_idx + 1}",
+                        start_line=start_line, end_line=end_line,
+                        docstring="GSP Groovy Scriptlet Block",
+                        parameters=[], return_type=None, is_async=False, is_method=False,
+                        class_name=None, decorators=[], complexity=1
+                    ))
+
+            # 3. Structural Traverse for UI (HTML/Tags) -> Mapped as Classes to retain heavy chunks
+            html_sanitized = regex_scriptlet.sub('', content)
+            html_sanitized = re.sub(r'<(g:)([^>\s]+)([^>]*)>', r'<g_\2\3>', html_sanitized)
+            html_sanitized = re.sub(r'</(g:)([^>]+)>', r'</g_\2>', html_sanitized)
+
+            soup = BeautifulSoup(html_sanitized, 'html.parser')
+            structural_nodes = soup.find_all(['div', 'form', 'g_form', 'table', 'section'])
+
+            for node_idx, node in enumerate(structural_nodes):
+                if node.parent and node.parent.name in ['body', 'html', 'main', 'section']:
+                    raw_text = node.get_text(separator=" ", strip=True)
+                    if len(raw_text) >= 100:
+                        # Estimate lines based on text position (approximate for BS4)
+                        node_str = str(node)
+                        start_line = 1  # Approximation
+
+                        classes.append(ClassInfo(
+                            name=f"gsp_layout_markup_{node.name.replace('g_', 'g:')}_{node_idx}",
+                            start_line=start_line,
+                            end_line=start_line + str(node).count('\n'),
+                            docstring="GSP Structural UI Component",
+                            bases=[], methods=[], decorators=[]
+                        ))
+
+            return FileParseResult(
+                file_path=file_path, language=language,
+                classes=classes, functions=functions, imports=imports,
+                module_docstring="Grails Server Page View",
+                total_lines=len(lines), code_lines=len(lines), comment_lines=0
+            )
+
+        except Exception as e:
+            self.logger.warning(f"Failed to parse GSP file {file_path}: {e}")
+            return self._parse_generic(file_path, content, language)
 
     def _parse_generic(self, file_path: str, content: str, language: str) -> FileParseResult:
         """Generic parsing for unsupported languages"""
         # Strip markdown code fences if present
         content = self._strip_markdown_code_fences(content)
-        
+
         lines = content.split("\n")
         total_lines = len(lines)
-        
+
         # Simple heuristics for code vs comment lines
         code_lines = 0
         comment_lines = 0
-        
+
         for line in lines:
             stripped = line.strip()
             if not stripped:
@@ -1687,7 +1868,7 @@ class CodeParser:
                 comment_lines += 1
             else:
                 code_lines += 1
-        
+
         return FileParseResult(
             file_path=file_path,
             language=language,

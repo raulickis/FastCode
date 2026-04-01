@@ -47,6 +47,7 @@ tqdm
 numpy
 pandas
 pathspec
+beautifulsoup4
 
 # Caching
 diskcache

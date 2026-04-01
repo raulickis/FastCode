@@ -181,6 +181,7 @@ def get_language_from_extension(ext: str) -> str:
         ".java": "java",
         ".go": "go",
         ".groovy": "groovy",
+        ".gsp": "gsp",
         ".cpp": "cpp",
         ".cc": "cpp",
         ".c": "c",

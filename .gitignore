@@ -89,3 +89,5 @@ association_agent.py
 accurate_agent.py
 # api.py
 */testcases/*
+
+nanobot_config.json
