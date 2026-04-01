@@ -4,6 +4,8 @@ import html
 import json
 import os
 import re
+import ipaddress
+import socket
 from typing import Any
 from urllib.parse import urlparse
 
@@ -38,6 +40,12 @@ def _validate_url(url: str) -> tuple[bool, str]:
             return False, f"Only http/https allowed, got '{p.scheme or 'none'}'"
         if not p.netloc:
             return False, "Missing domain"
+        try:
+            ip = socket.gethostbyname(p.hostname)
+            if ipaddress.ip_address(ip).is_private or ipaddress.ip_address(ip).is_loopback:
+                return False, "Access to internal networks is forbidden."
+        except Exception:
+            pass        
         return True, ""
     except Exception as e:
         return False, str(e)

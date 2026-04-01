@@ -249,7 +249,7 @@ async def index_repository(force: bool = False):
     
     try:
         logger.info("Indexing repository")
-        fastcode_instance.index_repository(force=force)
+        await asyncio.to_thread(fastcode_instance.index_repository, force=force)
         
         # Invalidate scan cache since we just added/updated an index
         fastcode_instance.vector_store.invalidate_scan_cache()
@@ -302,7 +302,7 @@ async def load_and_index(request: LoadRepositoryRequest, force: bool = False):
         fastcode_instance.load_repository(request.source, request.is_url)
         
         logger.info("Indexing repository")
-        fastcode_instance.index_repository(force=force)
+        await asyncio.to_thread(fastcode_instance.index_repository, force=force)
         
         # Invalidate scan cache since we just added/updated an index
         fastcode_instance.vector_store.invalidate_scan_cache()
@@ -455,8 +455,7 @@ async def upload_and_index(file: UploadFile = File(...), force: bool = False):
     
     # Then index
     try:
-        logger.info("Indexing uploaded repository")
-        fastcode_instance.index_repository(force=force)
+        await asyncio.to_thread(fastcode_instance.index_repository, force=force)
         
         # Invalidate scan cache since we just added an index
         fastcode_instance.vector_store.invalidate_scan_cache()

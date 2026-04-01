@@ -24,6 +24,7 @@ services:
       - ./data:/app/data
       - ./repos:/app/repos
       - ./logs:/app/logs
+      - ~/workspace/monitor:/app/repos-mon
     environment:
       - PYTHONUNBUFFERED=1
       - TOKENIZERS_PARALLELISM=false

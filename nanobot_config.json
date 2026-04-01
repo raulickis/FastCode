@@ -2,7 +2,7 @@
   "agents": {
     "defaults": {
       "workspace": "~/.nanobot/workspace",
-      "model": "google/gemini-3-flash-preview",
+      "model": "gemini-3-flash-preview",
       "maxTokens": 8192,
       "temperature": 0.7,
       "maxToolIterations": 20,
