@@ -185,7 +185,17 @@ class LiteLLMProvider(LLMProvider):
             }
         
         reasoning_content = getattr(message, "reasoning_content", None)
-        
+
+        # --- NOVO LOG DE CUSTO DO AGENTE ---
+        if usage:
+            from loguru import logger
+            logger.info(
+                f"💰 [NANOBOT AGENT] In: {usage.get('prompt_tokens', 0)} | "
+                f"Out: {usage.get('completion_tokens', 0)} | "
+                f"Total: {usage.get('total_tokens', 0)}"
+            )
+        # -----------------------------------
+
         return LLMResponse(
             content=message.content,
             tool_calls=tool_calls,

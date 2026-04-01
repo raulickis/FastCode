@@ -137,6 +137,17 @@ def _ensure_fastcode_initialized():
     if fastcode_instance is None:
         logger.info("Initializing FastCode system (lazy initialization)")
         fastcode_instance = FastCode()
+        
+        # --- FIX: AUTO-HYDRATE DO ESTADO ANTERIOR ---
+        try:
+            available = fastcode_instance.vector_store.scan_available_indexes(use_cache=False)
+            if available:
+                logger.info(f"Auto-loading {len(available)} existing repositories into memory...")
+                fastcode_instance._load_multi_repo_cache()
+        except Exception as e:
+            logger.error(f"Failed to auto-load repositories: {e}")
+        # --------------------------------------------
+        
     return fastcode_instance
 
 

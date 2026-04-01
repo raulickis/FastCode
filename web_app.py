@@ -130,6 +130,18 @@ async def startup_event():
     logger.info("Initializing FastCode system")
     fastcode_instance = FastCode()
 
+    # --- FIX: AUTO-HYDRATE DO ESTADO ANTERIOR ---
+    try:
+        # Checa se há repositórios no disco
+        available = fastcode_instance.vector_store.scan_available_indexes(use_cache=False)
+        if available:
+            logger.info(f"Auto-loading {len(available)} existing repositories into memory...")
+            # Carrega FAISS, BM25 e Grafos do disco para a RAM
+            fastcode_instance._load_multi_repo_cache()
+    except Exception as e:
+        logger.error(f"Failed to auto-load repositories: {e}")
+    # --------------------------------------------
+
 
 @app.get("/", response_class=HTMLResponse)
 async def get_web_interface():

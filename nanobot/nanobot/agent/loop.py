@@ -368,7 +368,10 @@ class AgentLoop:
         # Agent loop
         iteration = 0
         final_content = None
-        
+        # --- ACUMULADORES DE TOKENS ---
+        turn_prompt_tokens = 0
+        turn_completion_tokens = 0
+
         while iteration < self.max_iterations:
             iteration += 1
             
@@ -378,7 +381,13 @@ class AgentLoop:
                 tools=self.tools.get_definitions(),
                 model=self.model
             )
-            
+
+            # --- SOMA OS TOKENS DESTA ITERAÇÃO ---
+            if response.usage:
+                turn_prompt_tokens += response.usage.get("prompt_tokens", 0)
+                turn_completion_tokens += response.usage.get("completion_tokens", 0)
+            # -------------------------------------
+
             # Handle tool calls
             if response.has_tool_calls:
                 # Add assistant message with tool calls
@@ -426,7 +435,17 @@ class AgentLoop:
         
         if final_content is None:
             final_content = "I've completed processing but have no response to give."
-        
+
+        # --- INJETA O RELATÓRIO NO CHAT ---
+        total_turn_tokens = turn_prompt_tokens + turn_completion_tokens
+        if total_turn_tokens > 0:
+            final_content += (
+                f"\n\n---\n"
+                f"📊 **Agent Cost**: {turn_prompt_tokens} In | "
+                f"{turn_completion_tokens} Out | {total_turn_tokens} Total"
+            )
+        # ----------------------------------
+
         # Log response preview
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
         logger.info(f"Response to {msg.channel}:{msg.sender_id}: {preview}")

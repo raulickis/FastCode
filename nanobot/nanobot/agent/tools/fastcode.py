@@ -200,7 +200,11 @@ class FastCodeQueryTool(Tool):
                 if sid:
                     lines.append(f"\n[Session: {sid}]")
                 if total_tokens:
-                    lines.append(f"[Tokens: {total_tokens}]")
+                    p_tokens = data.get("prompt_tokens", 0)
+                    c_tokens = data.get("completion_tokens", 0)
+                    lines.append(
+                        f"\n🔍 [FastCode API: {p_tokens} In | {c_tokens} Out | {total_tokens} Total]"
+                    )
 
                 return "\n".join(lines)
 

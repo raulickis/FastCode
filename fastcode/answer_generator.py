@@ -656,6 +656,17 @@ Symbol Mappings:
             content = getattr(message, "content", None) if message else None
             if content is None:
                 raise ValueError(f"LLM response has no content: {response}")
+            
+            # --- NOVA CAPTURA DE TOKENS REAIS DA API ---
+            usage = getattr(response, "usage", None)
+            if usage:
+                self.logger.info(
+                    f"💰 [FASTCODE API REAL] Prompt: {getattr(usage, 'prompt_tokens', 0)} | "
+                    f"Completion: {getattr(usage, 'completion_tokens', 0)} | "
+                    f"Total: {getattr(usage, 'total_tokens', 0)}"
+                )
+            # ------------------------------------------
+            
             return content
 
         except Exception as e:

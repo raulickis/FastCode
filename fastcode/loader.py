@@ -266,7 +266,7 @@ class RepositoryLoader:
         for root, dirs, filenames in os.walk(self.repo_path):
             # Filter out ignored directories
             dirs[:] = [d for d in dirs if not should_ignore_path(
-                os.path.join(root, d), effective_ignore
+                os.path.relpath(os.path.join(root, d), self.repo_path), effective_ignore
             )]
 
             for filename in filenames:
