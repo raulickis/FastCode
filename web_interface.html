@@ -795,12 +795,17 @@
         const container = document.getElementById('messages');
         const isUser = msg.role === 'user';
 
-        // Lógica de Data e Hora
+        // Lógica de Data e Hora (Corrigida para Python Unix Timestamp)
         let timeString = '';
         if (msg.timestamp) {
-            const d = new Date(msg.timestamp); // Tenta ler ISO string
-            timeString = isNaN(d.getTime()) ? new Date(msg.timestamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        } else {
+            // Python manda em segundos, JS precisa de ms
+            const ms = typeof msg.timestamp === 'number' ? msg.timestamp * 1000 : msg.timestamp;
+            const d = new Date(ms);
+            if (!isNaN(d.getTime())) {
+                timeString = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            }
+        }
+        if (!timeString) {
             timeString = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
 
@@ -835,7 +840,7 @@
                 </div>`;
             }
 
-            // O Painel de Observabilidade de Tokens (Visível e Elegante)
+            // O Painel de Observabilidade de Tokens
             let tokensHtml = '';
             if (msg.metadata && msg.metadata.total_tokens !== undefined) {
                 tokensHtml = `
@@ -1037,11 +1042,23 @@
             history.sort((a,b) => (a.turn_number||0) - (b.turn_number||0));
 
             history.forEach(turn => {
-                if(turn.query) addMessage({ role: 'user', content: turn.query, timestamp: turn.timestamp });
-                if(turn.answer) addMessage({ role: 'assistant', content: turn.answer, sources: turn.retrieved_elements, metadata: turn.metadata, timestamp: turn.timestamp });
+                if(turn.query) {
+                    addMessage({ role: 'user', content: turn.query, timestamp: turn.timestamp });
+                }
+                if(turn.answer) {
+                    addMessage({
+                        role: 'assistant',
+                        content: turn.answer,
+                        sources: turn.retrieved_elements,
+                        metadata: turn.metadata,
+                        timestamp: turn.timestamp
+                    });
+                }
             });
-            switchTab('repos'); // Go back to view
-        } catch(e) {}
+            switchTab('repos');
+        } catch(e) {
+            console.error("Error loading session:", e);
+        }
     }
 
     function newChat() {

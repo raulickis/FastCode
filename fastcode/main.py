@@ -582,7 +582,8 @@ class FastCode:
                 # --- CÁLCULO DE TOKENS PARA O STREAMING ---
                 from .utils import count_tokens
                 prompt_tokens = answer_metadata.get("prompt_tokens", 0)
-                completion_tokens = count_tokens(full_answer, self.model) if full_answer else 0
+                # A CORREÇÃO ESTÁ AQUI: self.answer_generator.model
+                completion_tokens = count_tokens(full_answer, self.answer_generator.model) if full_answer else 0
                 total_tokens = prompt_tokens + completion_tokens
                 # ------------------------------------------
 
@@ -612,10 +613,9 @@ class FastCode:
                     "keywords": getattr(processed_query, "keywords", None),
                     "repo_filter": repo_filter,
                     "multi_turn": enable_multi_turn,
-                    # --- FIX: PERSISTINDO OS TOKENS NO HISTÓRICO ---
                     "prompt_tokens": answer_metadata.get("prompt_tokens", 0),
-                    "completion_tokens": count_tokens(full_answer, self.model) if full_answer else 0,
-                    "total_tokens": answer_metadata.get("prompt_tokens", 0) + (count_tokens(full_answer, self.model) if full_answer else 0)
+                    "completion_tokens": count_tokens(full_answer, self.answer_generator.model) if full_answer else 0,
+                    "total_tokens": answer_metadata.get("prompt_tokens", 0) + (count_tokens(full_answer, self.answer_generator.model) if full_answer else 0)
                 })
 
                 self.cache_manager.save_dialogue_turn(
