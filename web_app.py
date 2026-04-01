@@ -156,13 +156,13 @@ async def get_web_interface():
 async def get_status(full_scan: bool = False):
     """
     Get system status
-    
+
     Args:
         full_scan: If True, force a full scan of available indexes (slower but fresh data)
     """
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     # Use cached scan by default for better performance
     available_repos = fastcode_instance.vector_store.scan_available_indexes(use_cache=not full_scan)
     loaded_repos = fastcode_instance.list_repositories()
@@ -182,7 +182,7 @@ async def health_check():
     """Lightweight health check endpoint (no expensive operations)"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     return {
         "status": "healthy",
         "repo_loaded": fastcode_instance.repo_loaded,
@@ -195,18 +195,18 @@ async def health_check():
 async def list_repositories(full_scan: bool = False):
     """
     List available (indexed on disk) and loaded repositories
-    
+
     Args:
         full_scan: If True, force a full scan of available indexes (slower but fresh data)
     """
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     try:
         # Use cached scan by default for better performance
         available_repos = fastcode_instance.vector_store.scan_available_indexes(use_cache=not full_scan)
         loaded_repos = fastcode_instance.list_repositories()
-        
+
         return {
             "status": "success",
             "available": available_repos,
@@ -222,17 +222,17 @@ async def load_repository(request: LoadRepositoryRequest):
     """Load a repository"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     try:
         logger.info(f"Loading repository: {request.source}")
         fastcode_instance.load_repository(request.source, request.is_url)
-        
+
         return {
             "status": "success",
             "message": "Repository loaded successfully",
             "repo_info": fastcode_instance.repo_info,
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to load repository: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -243,23 +243,23 @@ async def index_repository(force: bool = False):
     """Index the loaded repository"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     if not fastcode_instance.repo_loaded:
         raise HTTPException(status_code=400, detail="No repository loaded")
-    
+
     try:
         logger.info("Indexing repository")
         await asyncio.to_thread(fastcode_instance.index_repository, force=force)
-        
+
         # Invalidate scan cache since we just added/updated an index
         fastcode_instance.vector_store.invalidate_scan_cache()
-        
+
         return {
             "status": "success",
             "message": "Repository indexed successfully",
             "summary": fastcode_instance.get_repository_summary(),
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to index repository: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -270,17 +270,17 @@ async def index_multiple(request: IndexMultipleRequest):
     """Load and index multiple repositories"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     if not request.sources:
         raise HTTPException(status_code=400, detail="No repositories provided")
-    
+
     try:
         logger.info(f"Indexing {len(request.sources)} repositories")
         fastcode_instance.load_multiple_repositories([s.dict() for s in request.sources])
-        
+
         # Invalidate scan cache since we just added/updated indexes
         fastcode_instance.vector_store.invalidate_scan_cache()
-        
+
         return {
             "status": "success",
             "message": "Repositories indexed successfully",
@@ -296,23 +296,23 @@ async def load_and_index(request: LoadRepositoryRequest, force: bool = False):
     """Load and index repository in one call"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     try:
         logger.info(f"Loading repository: {request.source}")
         fastcode_instance.load_repository(request.source, request.is_url)
-        
+
         logger.info("Indexing repository")
         await asyncio.to_thread(fastcode_instance.index_repository, force=force)
-        
+
         # Invalidate scan cache since we just added/updated an index
         fastcode_instance.vector_store.invalidate_scan_cache()
-        
+
         return {
             "status": "success",
             "message": "Repository loaded and indexed successfully",
             "summary": fastcode_instance.get_repository_summary(),
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to load and index: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -323,17 +323,17 @@ async def load_repositories(request: LoadRepositoriesRequest):
     """Load existing indexed repositories from cache"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     if not request.repo_names:
         raise HTTPException(status_code=400, detail="No repository names provided")
-    
+
     try:
         logger.info(f"Loading repositories from cache: {request.repo_names}")
         success = fastcode_instance._load_multi_repo_cache(repo_names=request.repo_names)
-        
+
         if not success:
             raise HTTPException(status_code=500, detail="Failed to load repositories from cache")
-        
+
         return {
             "status": "success",
             "loaded": fastcode_instance.list_repositories(),
@@ -351,20 +351,20 @@ async def upload_repository_zip(file: UploadFile = File(...)):
     """Upload and extract repository ZIP file to repos directory (same as URL download)"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     # Validate file type
     if not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="Only ZIP files are supported")
-    
+
     # Check file size (100MB limit)
     file.file.seek(0, 2)  # Seek to end
     file_size = file.file.tell()
     file.file.seek(0)  # Reset to beginning
-    
+
     max_size = 100 * 1024 * 1024  # 100MB
     if file_size > max_size:
         raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {max_size / (1024*1024)}MB")
-    
+
     try:
         # Extract repository name from ZIP filename (remove .zip extension)
         repo_name = file.filename.rsplit('.', 1)[0]
@@ -373,66 +373,66 @@ async def upload_repository_zip(file: UploadFile = File(...)):
             if repo_name.endswith(suffix):
                 repo_name = repo_name[:-len(suffix)]
                 break
-        
+
         # Use configured repository workspace directory
         repo_workspace = getattr(fastcode_instance.loader, "safe_repo_root", "./repos")
         repos_dir = Path(repo_workspace)
         repos_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Target repository path in repos directory
         repo_path = repos_dir / repo_name
-        
+
         # Backup existing repository before overwrite
         if repo_path.exists():
             fastcode_instance.loader._backup_existing_repo(str(repo_path))
-        
+
         # Create temporary directory for ZIP extraction
         temp_dir = tempfile.mkdtemp(prefix="fastcode_upload_")
         zip_path = Path(temp_dir) / file.filename
-        
+
         logger.info(f"Saving uploaded ZIP file: {file.filename} ({file_size} bytes)")
-        
+
         # Save uploaded file to temp directory
         with open(zip_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        
+
         # Extract to temporary directory first
         extract_dir = Path(temp_dir) / "extracted"
         extract_dir.mkdir(exist_ok=True)
-        
+
         logger.info(f"Extracting ZIP file to temporary directory: {extract_dir}")
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(extract_dir)
-        
+
         # Find the actual repository root (in case ZIP contains a single root folder)
         extracted_items = list(extract_dir.iterdir())
         if len(extracted_items) == 1 and extracted_items[0].is_dir():
             source_repo_path = extracted_items[0]
         else:
             source_repo_path = extract_dir
-        
+
         # Move the extracted repository to repos directory
         logger.info(f"Moving repository to: {repo_path}")
         shutil.move(str(source_repo_path), str(repo_path))
-        
+
         # Clean up temporary directory
         try:
             shutil.rmtree(temp_dir)
             logger.info(f"Cleaned up temporary directory: {temp_dir}")
         except Exception as cleanup_error:
             logger.warning(f"Failed to clean up temp directory: {cleanup_error}")
-        
+
         # Load repository from repos directory (same as URL download)
         logger.info(f"Loading repository from: {repo_path}")
         fastcode_instance.load_repository(str(repo_path), is_url=False)
-        
+
         return {
             "status": "success",
             "message": f"ZIP file '{file.filename}' uploaded and extracted to repos/{repo_name}",
             "repo_info": fastcode_instance.repo_info,
             "repo_path": str(repo_path),
         }
-    
+
     except zipfile.BadZipFile:
         logger.error("Invalid ZIP file")
         raise HTTPException(status_code=400, detail="Invalid ZIP file")
@@ -446,26 +446,26 @@ async def upload_and_index(file: UploadFile = File(...), force: bool = False):
     """Upload ZIP and index in one call"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     # First upload and load
     upload_result = await upload_repository_zip(file)
-    
+
     if upload_result["status"] != "success":
         return upload_result
-    
+
     # Then index
     try:
         await asyncio.to_thread(fastcode_instance.index_repository, force=force)
-        
+
         # Invalidate scan cache since we just added an index
         fastcode_instance.vector_store.invalidate_scan_cache()
-        
+
         return {
             "status": "success",
             "message": "Repository uploaded and indexed successfully",
             "summary": fastcode_instance.get_repository_summary(),
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to index uploaded repository: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -476,10 +476,10 @@ async def query_repository(request: QueryRequest):
     """Query the repository"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     if not fastcode_instance.repo_indexed:
         raise HTTPException(status_code=400, detail="Repository not indexed")
-    
+
     try:
         # Derive session handling for both modes (single-turn keeps a session for history)
         session_id = request.session_id or str(uuid.uuid4())[:8]
@@ -490,26 +490,26 @@ async def query_repository(request: QueryRequest):
 
         logger.info(f"Processing query: {request.question}")
         result = fastcode_instance.query(
-            request.question, 
+            request.question,
             request.filters,
             repo_filter=request.repo_filter,
             session_id=session_id,
             enable_multi_turn=request.multi_turn,
         )
-        
+
         # Extract token information
         prompt_tokens = result.get("prompt_tokens")
         completion_tokens = result.get("completion_tokens")
         total_tokens = result.get("total_tokens")
-        
+
         # Calculate total if not provided
         if total_tokens is None and prompt_tokens and completion_tokens:
             total_tokens = prompt_tokens + completion_tokens
-        
+
         # Ensure sources are JSON-serializable (query() already saves to cache)
         sources = result.get("sources", [])
         serialized_sources = [_safe_jsonable(source) for source in sources]
-        
+
         return QueryResponse(
             answer=result.get("answer", ""),
             query=result.get("query", ""),
@@ -520,7 +520,7 @@ async def query_repository(request: QueryRequest):
             total_tokens=total_tokens,
             session_id=session_id,
         )
-    
+
     except Exception as e:
         logger.error(f"Query failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -575,7 +575,10 @@ async def query_repository_stream(request: QueryRequest):
                             "type": "done",
                             "sources": serialized_sources,
                             "context_elements": metadata.get("context_elements", 0),
-                            "session_id": session_id
+                            "session_id": session_id,
+                            "prompt_tokens": metadata.get("prompt_tokens", 0),
+                            "completion_tokens": metadata.get("completion_tokens", 0),
+                            "total_tokens": metadata.get("total_tokens", 0)
                         }
                     elif "error" in metadata:
                         event_data = {"type": "error", "error": metadata["error"]}
@@ -611,14 +614,14 @@ async def get_repository_summary():
     """Get repository summary"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     if not fastcode_instance.repo_loaded:
         raise HTTPException(status_code=400, detail="No repository loaded")
-    
+
     summary_payload: Dict[str, Any] = {
         "status": "success",
     }
-    
+
     try:
         if fastcode_instance.multi_repo_mode:
             summary_payload["summary"] = fastcode_instance.get_repository_stats()
@@ -627,7 +630,7 @@ async def get_repository_summary():
     except Exception as e:
         logger.error(f"Failed to build summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     return summary_payload
 
 
@@ -636,9 +639,9 @@ async def clear_cache():
     """Clear cache"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     success = fastcode_instance.cache_manager.clear()
-    
+
     if success:
         return {"status": "success", "message": "Cache cleared"}
     else:
@@ -650,14 +653,14 @@ async def refresh_index_cache():
     """Force refresh the index scan cache"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     try:
         # Invalidate cache first
         fastcode_instance.vector_store.invalidate_scan_cache()
-        
+
         # Perform fresh scan
         available_repos = fastcode_instance.vector_store.scan_available_indexes(use_cache=False)
-        
+
         return {
             "status": "success",
             "message": "Index cache refreshed",
@@ -673,10 +676,10 @@ async def new_session(clear_session_id: Optional[str] = None):
     """Start a new conversation session"""
     if fastcode_instance is None:
         raise HTTPException(status_code=500, detail="FastCode not initialized")
-    
+
     if clear_session_id:
         fastcode_instance.delete_session(clear_session_id)
-    
+
     session_id = str(uuid.uuid4())[:8]
     return NewSessionResponse(session_id=session_id)
 
@@ -833,11 +836,11 @@ def start_web_app(host: str = "127.0.0.1", port: int = 5777, reload: bool = Fals
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="FastCode Web Interface")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind to (default: localhost)")
     parser.add_argument("--port", type=int, default=5777, help="Port to bind to (default: 5777)")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
-    
+
     args = parser.parse_args()
     start_web_app(host=args.host, port=args.port, reload=args.reload)
