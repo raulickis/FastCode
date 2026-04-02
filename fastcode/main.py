@@ -1101,15 +1101,19 @@ class FastCode:
         repo_names = self.vector_store.get_repository_names()
         repo_counts = self.vector_store.get_count_by_repository()
 
+        overviews = self.vector_store.load_repo_overviews()
+
         repositories = []
         for repo_name in repo_names:
             repo_info = self.loaded_repositories.get(repo_name, {})
+            overview_meta = overviews.get(repo_name, {}).get("metadata", {})
             repositories.append({
                 'name': repo_name,
                 'element_count': repo_counts.get(repo_name, 0),
                 'file_count': repo_info.get('file_count', 0),
                 'size_mb': repo_info.get('total_size_mb', 0),
-                'url': repo_info.get('url', 'N/A'),
+                'url': repo_info.get('url', overview_meta.get('repo_url', 'N/A')),
+                'is_partial': overview_meta.get('is_partial', False),
             })
 
         return repositories
@@ -1748,3 +1752,68 @@ class FastCode:
             enriched_sessions.append(session)
 
         return enriched_sessions
+
+        def heal_repository(self, repo_name: str) -> Dict[str, Any]:
+            """
+            Heal a partially indexed repository by regenerating its semantic overview.
+            This re-runs the LLM summarization without reprocessing AST/FAISS/BM25.
+            """
+            self.logger.info(f"Healing repository overview for: {repo_name}")
+
+            if not self.indexer.generate_repo_overview or not self.indexer.overview_generator:
+                return {"status": "error", "message": "Overview generation is disabled in config."}
+
+            # Locate repository on disk
+            repo_root = getattr(self.loader, "safe_repo_root", self.config.get("repo_root", "./repos"))
+            repo_path = os.path.join(repo_root, repo_name)
+
+            if not os.path.exists(repo_path):
+                return {"status": "error", "message": f"Source directory not found for {repo_name}"}
+
+            # Fetch existing overview to preserve URL
+            overviews = self.vector_store.load_repo_overviews()
+            old_overview = overviews.get(repo_name, {})
+            repo_url = old_overview.get("metadata", {}).get("repo_url", None)
+
+            # Scan files to reconstruct structure
+            temp_loader = RepositoryLoader(self.config)
+            temp_loader.repo_path = repo_path
+            files = temp_loader.scan_files()
+
+            try:
+                # Re-generate structure and LLM summary
+                file_structure = self.indexer.overview_generator.parse_file_structure(repo_path, files)
+                repo_overview = self.indexer.overview_generator.generate_overview(repo_path, repo_name, file_structure)
+
+                # Preserve existing URL if missing
+                if repo_url and not repo_overview.get("repo_url"):
+                    repo_overview["repo_url"] = repo_url
+
+                # Temporarily inject repo context into indexer for saving
+                original_name = self.indexer.current_repo_name
+                original_url = self.indexer.current_repo_url
+                self.indexer.current_repo_name = repo_name
+                self.indexer.current_repo_url = repo_url
+
+                self.indexer._save_repository_overview(repo_overview)
+
+                # Restore context
+                self.indexer.current_repo_name = original_name
+                self.indexer.current_repo_url = original_url
+
+                # Rebuild overview BM25 index to reflect new summary
+                self.retriever.build_repo_overview_bm25()
+
+                is_partial = repo_overview.get("is_partial", False)
+                status = "partial" if is_partial else "success"
+
+                self.logger.info(f"Healing complete for {repo_name}. Status: {status}")
+                return {
+                    "status": status,
+                    "message": "Repository overview regenerated successfully." if not is_partial else "Overview regenerated, but LLM failed again.",
+                    "is_partial": is_partial
+                }
+
+            except Exception as e:
+                self.logger.error(f"Failed to heal repository {repo_name}: {e}")
+                return {"status": "error", "message": str(e)}

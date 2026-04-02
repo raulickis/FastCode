@@ -167,6 +167,11 @@ async def get_status(full_scan: bool = False):
     available_repos = fastcode_instance.vector_store.scan_available_indexes(use_cache=not full_scan)
     loaded_repos = fastcode_instance.list_repositories()
 
+    # Inject is_partial flag into available_repos
+    overviews = fastcode_instance.vector_store.load_repo_overviews()
+    for repo in available_repos:
+        repo['is_partial'] = overviews.get(repo['name'], {}).get('metadata', {}).get('is_partial', False)
+
     return StatusResponse(
         status="ready" if fastcode_instance.repo_indexed else "not_ready",
         repo_loaded=fastcode_instance.repo_loaded,
@@ -206,6 +211,11 @@ async def list_repositories(full_scan: bool = False):
         # Use cached scan by default for better performance
         available_repos = fastcode_instance.vector_store.scan_available_indexes(use_cache=not full_scan)
         loaded_repos = fastcode_instance.list_repositories()
+
+        # Inject is_partial flag into available_repos
+        overviews = fastcode_instance.vector_store.load_repo_overviews()
+        for repo in available_repos:
+            repo['is_partial'] = overviews.get(repo['name'], {}).get('metadata', {}).get('is_partial', False)
 
         return {
             "status": "success",
@@ -768,6 +778,32 @@ async def get_session(session_id: str):
 class DeleteReposRequest(BaseModel):
     repo_names: List[str] = Field(..., description="Repository names to delete")
     delete_source: bool = Field(True, description="Also delete cloned source code in repos/")
+
+class HealRepositoryRequest(BaseModel):
+    repo_name: str = Field(..., description="Repository name to heal")
+
+
+@app.post("/api/heal-index")
+async def heal_index(request: HealRepositoryRequest):
+    """Heal a partially indexed repository (regenerate LLM overview)"""
+    if fastcode_instance is None:
+        raise HTTPException(status_code=500, detail="FastCode not initialized")
+
+    try:
+        logger.info(f"Received heal request for repository: {request.repo_name}")
+        result = await asyncio.to_thread(fastcode_instance.heal_repository, request.repo_name)
+
+        if result.get("status") == "error":
+            raise HTTPException(status_code=500, detail=result.get("message"))
+
+        # Invalidate scan cache to refresh UI state
+        fastcode_instance.vector_store.invalidate_scan_cache()
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to heal repository {request.repo_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/delete-repos")

@@ -75,6 +75,9 @@ class DeleteReposRequest(BaseModel):
     repo_names: List[str] = Field(..., description="Repository names to delete")
     delete_source: bool = Field(True, description="Also delete cloned source code in repos/")
 
+class HealRepositoryRequest(BaseModel):
+    repo_name: str = Field(..., description="Repository name to heal")
+
 
 class StatusResponse(BaseModel):
     status: str
@@ -137,7 +140,7 @@ def _ensure_fastcode_initialized():
     if fastcode_instance is None:
         logger.info("Initializing FastCode system (lazy initialization)")
         fastcode_instance = FastCode()
-        
+
         # --- FIX: AUTO-HYDRATE DO ESTADO ANTERIOR ---
         try:
             available = fastcode_instance.vector_store.scan_available_indexes(use_cache=False)
@@ -147,7 +150,7 @@ def _ensure_fastcode_initialized():
         except Exception as e:
             logger.error(f"Failed to auto-load repositories: {e}")
         # --------------------------------------------
-        
+
     return fastcode_instance
 
 

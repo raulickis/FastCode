@@ -511,23 +511,48 @@
             return;
         }
 
-        filtered.forEach(repo => {
+filtered.forEach(repo => {
             const isSelected = state.selectedRepos.includes(repo.name);
+            const isPartial = repo.is_partial === true;
             const el = document.createElement('div');
-            el.className = `p-3 rounded-lg border cursor-pointer transition flex items-center justify-between group ${isSelected ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300 bg-white'}`;
+
+            const baseBorder = isPartial && isSelected ? 'border-amber-500 bg-amber-50' :
+                               isPartial ? 'border-amber-200 bg-white hover:border-amber-300' :
+                               isSelected ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300 bg-white';
+
+            el.className = `p-3 rounded-lg border cursor-pointer transition flex items-center justify-between group ${baseBorder}`;
             el.onclick = () => toggleRepo(repo.name);
 
+            const partialBadge = isPartial
+                ? `<span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-200" title="Missing LLM Semantic Overview">Partial</span>`
+                : '';
+
+            const healButton = isPartial
+                ? `<button onclick="event.stopPropagation(); healRepository('${repo.name}')" class="ml-2 p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded transition" title="Complete Indexing (Retry LLM)">
+                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                   </button>`
+                : '';
+
+            const checkIconColor = isPartial ? 'text-amber-600' : 'text-teal-600';
+
             el.innerHTML = `
-                <div class="flex items-center gap-3 overflow-hidden">
-                    <div class="${isSelected ? 'text-teal-600' : 'text-gray-400 group-hover:text-teal-500'}">>
+                <div class="flex items-center gap-3 overflow-hidden w-full">
+                    <div class="${isSelected ? checkIconColor : 'text-gray-400 group-hover:text-teal-500'} flex-shrink-0">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                     </div>
-                    <div class="min-w-0">
-                        <div class="text-sm font-medium text-gray-900 truncate">${repo.name}</div>
-                        <div class="text-xs text-gray-500">${repo.file_count} files • ${(repo.size_mb||0).toFixed(1)} MB</div>
+                    <div class="min-w-0 flex-1 flex items-center justify-between">
+                        <div>
+                            <div class="text-sm font-medium text-gray-900 truncate flex items-center">
+                                ${repo.name} ${partialBadge}
+                            </div>
+                            <div class="text-xs text-gray-500">${repo.file_count} files • ${(repo.size_mb||0).toFixed(1)} MB</div>
+                        </div>
+                        <div class="flex items-center">
+                            ${healButton}
+                            ${isSelected ? `<svg class="w-5 h-5 ${checkIconColor} ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>` : ''}
+                        </div>
                     </div>
                 </div>
-                ${isSelected ? '<svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>' : ''}
             `;
             list.appendChild(el);
         });
@@ -1153,6 +1178,30 @@
                 showToast(data.detail || 'Delete failed', 'error');
             }
         } catch(e) { showToast('Delete failed: ' + e.message, 'error'); }
+    }
+
+    async function healRepository(repoName) {
+        showToast(`Healing repository ${repoName}...`, 'info');
+        try {
+            const res = await fetch('/api/heal-index', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ repo_name: repoName })
+            });
+            const data = await res.json();
+            if (res.ok && data.status !== 'error') {
+                if (data.is_partial) {
+                    showToast(`LLM failed again for ${repoName}. Still partial.`, 'error');
+                } else {
+                    showToast(`Repository ${repoName} healed successfully!`, 'success');
+                }
+                refreshStatus();
+            } else {
+                showToast(data.detail || data.message || 'Healing failed', 'error');
+            }
+        } catch(e) {
+            showToast('Healing request failed: ' + e.message, 'error');
+        }
     }
 
     async function deleteSession(sessionId) {

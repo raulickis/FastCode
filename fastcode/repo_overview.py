@@ -4,8 +4,7 @@ Repository Overview Generator - Generate summaries and file structures for repos
 
 import os
 import logging
-from typing import Dict, List, Any, Optional
-from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple
 from openai import OpenAI
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -70,19 +69,23 @@ class RepositoryOverviewGenerator:
             file_structure: Parsed file structure information
 
         Returns:
-            Dictionary with overview information
+            Dictionary with overview information and partial state flag
         """
         self.logger.info(f"Generating overview for repository: {repo_name}")
 
         # Find and read README file
         readme_content = self._find_and_read_readme(repo_path)
+        is_partial = False
 
         # Generate overview from README if available
         if readme_content and self.llm_client:
-            summary = self._summarize_readme_with_llm(repo_name, readme_content, file_structure)
+            summary, is_partial = self._summarize_readme_with_llm(repo_name, readme_content, file_structure)
         else:
             # Fallback: generate overview from file structure only
             summary = self._generate_structure_based_overview(repo_name, file_structure)
+            # If the client exists but there is no readme, it's a complete structural overview.
+            # We only flag as partial if a network/LLM error occurred.
+            is_partial = False
 
         # Generate detailed file structure text
         structure_text = self._format_file_structure(file_structure)
@@ -94,6 +97,7 @@ class RepositoryOverviewGenerator:
             "file_structure": file_structure,
             "structure_text": structure_text,
             "has_readme": readme_content is not None,
+            "is_partial": is_partial,
         }
 
         return overview
@@ -227,8 +231,8 @@ class RepositoryOverviewGenerator:
         return False
 
     def _summarize_readme_with_llm(self, repo_name: str, readme_content: str,
-                                   file_structure: Dict[str, Any]) -> str:
-        """Use LLM to summarize README and infer repository purpose"""
+                                   file_structure: Dict[str, Any]) -> Tuple[str, bool]:
+        """Use LLM to summarize README and infer repository purpose. Returns (summary, is_partial)."""
 
         # Truncate very long READMEs
         if len(readme_content) > 8000:
@@ -264,7 +268,7 @@ Summary:"""
                     temperature=self.temperature,
                     max_tokens=self.max_tokens,
                 )
-                return response.choices[0].message.content.strip()
+                return response.choices[0].message.content.strip(), False
 
             elif self.provider == "anthropic":
                 response = self.llm_client.messages.create(
@@ -273,17 +277,17 @@ Summary:"""
                     temperature=self.temperature,
                     messages=[{"role": "user", "content": prompt}]
                 )
-                return response.content[0].text.strip()
+                return response.content[0].text.strip(), False
 
         except Exception as e:
-            self.logger.error(f"LLM summarization failed: {e}")
-            return self._generate_structure_based_overview(repo_name, file_structure)
+            self.logger.error(f"LLM summarization failed: {e}. Tagging as partial.")
+            return self._generate_structure_based_overview(repo_name, file_structure), True
 
-        return self._generate_structure_based_overview(repo_name, file_structure)
+        return self._generate_structure_based_overview(repo_name, file_structure), True
 
     def _generate_structure_based_overview(self, repo_name: str,
                                           file_structure: Dict[str, Any]) -> str:
-        """Generate overview based on file structure when README is unavailable"""
+        """Generate overview based on file structure when README is unavailable or LLM fails"""
 
         languages = file_structure.get("languages", {})
         total_files = file_structure.get("total_files", 0)
