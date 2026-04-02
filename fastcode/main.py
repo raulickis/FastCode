@@ -222,10 +222,25 @@ class FastCode:
             metadata = []
 
             for elem in elements:
-                embedding = elem.metadata.get("embedding")
-                if embedding is not None:
-                    vectors.append(embedding)
-                    metadata.append(elem.to_dict())
+                embeddings = elem.metadata.get("embeddings", [])
+                if embeddings:
+                    for i, emb in enumerate(embeddings):
+                        vectors.append(emb)
+                        elem_dict = elem.to_dict()
+                        if "metadata" in elem_dict:
+                            elem_dict["metadata"].pop("embeddings", None)
+                            elem_dict["metadata"].pop("embedding_texts", None)
+                        elem_dict["chunk_idx"] = i
+                        metadata.append(elem_dict)
+                else:
+                    embedding = elem.metadata.get("embedding")
+                    if embedding is not None:
+                        vectors.append(embedding)
+                        elem_dict = elem.to_dict()
+                        if "metadata" in elem_dict:
+                            elem_dict["metadata"].pop("embeddings", None)
+                            elem_dict["metadata"].pop("embedding_texts", None)
+                        metadata.append(elem_dict)
 
             if vectors:
                 vectors_array = np.array(vectors)
@@ -1005,10 +1020,25 @@ class FastCode:
                 metadata = []
 
                 for elem in elements:
-                    embedding = elem.metadata.get("embedding")
-                    if embedding is not None:
-                        vectors.append(embedding)
-                        metadata.append(elem.to_dict())
+                    embeddings = elem.metadata.get("embeddings", [])
+                    if embeddings:
+                        for i, emb in enumerate(embeddings):
+                            vectors.append(emb)
+                            elem_dict = elem.to_dict()
+                            if "metadata" in elem_dict:
+                                elem_dict["metadata"].pop("embeddings", None)
+                                elem_dict["metadata"].pop("embedding_texts", None)
+                            elem_dict["chunk_idx"] = i
+                            metadata.append(elem_dict)
+                    else:
+                        embedding = elem.metadata.get("embedding")
+                        if embedding is not None:
+                            vectors.append(embedding)
+                            elem_dict = elem.to_dict()
+                            if "metadata" in elem_dict:
+                                elem_dict["metadata"].pop("embeddings", None)
+                                elem_dict["metadata"].pop("embedding_texts", None)
+                            metadata.append(elem_dict)
 
                 if vectors:
                     vectors_array = np.array(vectors)
@@ -1542,10 +1572,25 @@ class FastCode:
 
         vectors, metadata_list = [], []
         for elem in all_elements:
-            embedding = elem.metadata.get("embedding")
-            if embedding is not None:
-                vectors.append(embedding)
-                metadata_list.append(elem.to_dict())
+            embeddings = elem.metadata.get("embeddings", [])
+            if embeddings:
+                for i, emb in enumerate(embeddings):
+                    vectors.append(emb)
+                    elem_dict = elem.to_dict()
+                    if "metadata" in elem_dict:
+                        elem_dict["metadata"].pop("embeddings", None)
+                        elem_dict["metadata"].pop("embedding_texts", None)
+                    elem_dict["chunk_idx"] = i
+                    metadata_list.append(elem_dict)
+            else:
+                embedding = elem.metadata.get("embedding")
+                if embedding is not None:
+                    vectors.append(embedding)
+                    elem_dict = elem.to_dict()
+                    if "metadata" in elem_dict:
+                        elem_dict["metadata"].pop("embeddings", None)
+                        elem_dict["metadata"].pop("embedding_texts", None)
+                    metadata_list.append(elem_dict)
 
         if vectors:
             temp_store.add_vectors(np.array(vectors), metadata_list)

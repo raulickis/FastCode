@@ -90,60 +90,80 @@ class CodeEmbedder:
         Returns:
             List of elements with embeddings added
         """
+        from .utils import chunk_text
+        
         if not elements:
             return []
         
-        # Prepare texts for embedding
-        texts = [self._prepare_code_text(elem) for elem in elements]
+        all_texts = []
+        element_text_ranges = []
+        
+        # Prepare texts
+        for elem in elements:
+            header = self._prepare_code_header(elem)
+            code = elem.get("code", "")
+            
+            start_idx = len(all_texts)
+            
+            if code:
+                # Truncate extremely long codes to prevent infinite chunking issues
+                if len(code) > 30000:
+                    code = code[:30000] + "..."
+                
+                chunks = chunk_text(code, chunk_size=300, overlap=50)
+                if not chunks:
+                    all_texts.append(header)
+                else:
+                    for chunk in chunks:
+                        chunk_content = f"{header}\nCode:\n{chunk['text']}"
+                        all_texts.append(chunk_content)
+            else:
+                all_texts.append(header)
+                
+            end_idx = len(all_texts)
+            element_text_ranges.append((start_idx, end_idx))
         
         # Generate embeddings
-        self.logger.info(f"Generating embeddings for {len(texts)} code elements")
-        embeddings = self.embed_batch(texts)
-        self.logger.info(f"✓ Successfully generated embeddings for {len(embeddings)} code elements")
+        self.logger.info(f"Generating embeddings for {len(all_texts)} chunks from {len(elements)} code elements")
+        all_embeddings = self.embed_batch(all_texts)
+        self.logger.info(f"✓ Successfully generated embeddings for {len(all_embeddings)} chunks")
         
         # Add embeddings to elements
-        for elem, embedding in zip(elements, embeddings):
-            elem["embedding"] = embedding
-            elem["embedding_text"] = texts[elements.index(elem)]
+        for i, elem in enumerate(elements):
+            start, end = element_text_ranges[i]
+            if start < end:
+                elem_embeddings = all_embeddings[start:end]
+                elem_texts = all_texts[start:end]
+                
+                elem["embeddings"] = elem_embeddings
+                elem["embedding_texts"] = elem_texts
+                # Compatibility properties (using the first chunk)
+                elem["embedding"] = elem_embeddings[0]
+                elem["embedding_text"] = elem_texts[0]
         
         return elements
     
-    def _prepare_code_text(self, element: Dict[str, Any]) -> str:
+    def _prepare_code_header(self, element: Dict[str, Any]) -> str:
         """
-        Prepare code element for embedding
-        
-        Combines various parts of the code element into a single text
-        suitable for embedding
+        Prepare code block header containing contextual metadata
         """
         parts = []
         
-        # Add type
         if "type" in element:
             parts.append(f"Type: {element['type']}")
         
-        # Add name
         if "name" in element:
             parts.append(f"Name: {element['name']}")
         
-        # Add signature (for functions)
         if "signature" in element:
             parts.append(f"Signature: {element['signature']}")
         
-        # Add docstring/description
         if "docstring" in element and element["docstring"]:
             parts.append(f"Documentation: {element['docstring']}")
         
-        # Add summary
         if "summary" in element and element["summary"]:
             parts.append(element["summary"])
-        
-        # Add code snippet (truncated)
-        if "code" in element:
-            code = element["code"]
-            if len(code) > 10000:  # Truncate long code
-                code = code[:10000] + "..."
-            parts.append(f"Code:\n{code}")
-        
+            
         return "\n".join(parts)
     
     def compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:

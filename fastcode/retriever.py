@@ -848,14 +848,15 @@ class HybridRetriever:
         for metadata, score in semantic_results:
             elem_id = metadata.get("id")
             if elem_id:
-                combined[elem_id] = {
-                    "element": metadata,
-                    "semantic_score": score * self.semantic_weight,
-                    "keyword_score": 0.0,
-                    "pseudocode_score": 0.0,
-                    "graph_score": 0.0,
-                    "total_score": score * self.semantic_weight,
-                }
+                if elem_id not in combined:
+                    combined[elem_id] = {
+                        "element": metadata,
+                        "semantic_score": score * self.semantic_weight,
+                        "keyword_score": 0.0,
+                        "pseudocode_score": 0.0,
+                        "graph_score": 0.0,
+                        "total_score": score * self.semantic_weight,
+                    }
         
         # Add pseudocode results (for implementation queries)
         if pseudocode_results:
@@ -865,8 +866,9 @@ class HybridRetriever:
                     pseudocode_contrib = score * pseudocode_weight
                     
                     if elem_id in combined:
-                        combined[elem_id]["pseudocode_score"] = pseudocode_contrib
-                        combined[elem_id]["total_score"] += pseudocode_contrib
+                        if combined[elem_id]["pseudocode_score"] == 0.0:
+                            combined[elem_id]["pseudocode_score"] = pseudocode_contrib
+                            combined[elem_id]["total_score"] += pseudocode_contrib
                     else:
                         combined[elem_id] = {
                             "element": metadata,

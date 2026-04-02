@@ -134,6 +134,8 @@ class CodeIndexer:
         for elem, elem_dict in zip(self.elements, elements_with_embeddings):
             elem.metadata["embedding"] = elem_dict.get("embedding")
             elem.metadata["embedding_text"] = elem_dict.get("embedding_text")
+            elem.metadata["embeddings"] = elem_dict.get("embeddings", [])
+            elem.metadata["embedding_texts"] = elem_dict.get("embedding_texts", [])
 
         self.logger.info(f"✓ Repository indexing completed for {repo_name or 'Unknown'}: {len(self.elements)} elements indexed with embeddings")
 
@@ -181,6 +183,8 @@ class CodeIndexer:
             for elem, elem_dict in zip(self.elements, elements_with_embeddings):
                 elem.metadata["embedding"] = elem_dict.get("embedding")
                 elem.metadata["embedding_text"] = elem_dict.get("embedding_text")
+                elem.metadata["embeddings"] = elem_dict.get("embeddings", [])
+                elem.metadata["embedding_texts"] = elem_dict.get("embedding_texts", [])
 
         return self.elements
 
