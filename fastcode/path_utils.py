@@ -60,20 +60,19 @@ def file_path_to_module_path(file_path: str, repo_root: str) -> Optional[str]:
         # Get the relative path from repo root
         relative_path = os.path.relpath(abs_file_path.rstrip(os.path.sep), abs_repo_root.rstrip(os.path.sep))
 
-        # Remove the file extension (.py)
-        if not relative_path.endswith('.py'):
-            # logger.warning(f"File {relative_path} is not a Python file")
-            return None
-
-        relative_path = relative_path[:-3]  # Remove '.py'
+        # Dynamically remove ANY file extension to support multilingual GraphRAG
+        # (e.g., .py, .js, .ts, .java, .groovy, .gsp)
+        relative_path, _ = os.path.splitext(relative_path)
 
         # Convert path separators to dots
         module_path = relative_path.replace(os.path.sep, '.')
 
-        # BUG FIX: Handle both endswith and exact match for __init__.py
-        # This fixes cases like '/repo/__init__.py' -> '__init__' -> '' (should return '')
+        # BUG FIX: Handle both endswith and exact match for root package identifiers
+        # Python uses __init__, JavaScript/TypeScript often uses index
         if module_path == '__init__' or module_path.endswith('.__init__'):
             module_path = module_path[:-9] if module_path.endswith('.__init__') else ''
+        elif module_path == 'index' or module_path.endswith('.index'):
+            module_path = module_path[:-6] if module_path.endswith('.index') else ''
 
         # Remove any leading dots that might result from relative paths
         module_path = module_path.lstrip('.')
