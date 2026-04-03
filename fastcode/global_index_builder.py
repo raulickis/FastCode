@@ -46,22 +46,24 @@ class GlobalIndexBuilder:
             "errors": 0
         }
 
-    def build_maps(self, elements: List[CodeElement], repo_root: str) -> None:
+    def build_maps(self, elements: List[CodeElement], repo_root: str, incremental: bool = False) -> None:
         """
         Build file_map, module_map, and export_map from indexed elements
 
         Args:
             elements: List of CodeElement objects from indexer
             repo_root: Repository root directory for module path conversion
+            incremental: If True, accumulates data without clearing previous maps (Cross-Repo)
         """
         self.logger.info(f"Building global maps from {len(elements)} elements")
         self.logger.info(f"Repository root: {repo_root}")
 
-        # Reset maps and stats
-        self.file_map.clear()
-        self.module_map.clear()
-        self.export_map.clear()
-        self.stats = {"files_processed": 0, "modules_created": 0, "symbols_exported": 0, "errors": 0}
+        # Reset maps and stats ONLY if not in incremental mode
+        if not incremental:
+            self.file_map.clear()
+            self.module_map.clear()
+            self.export_map.clear()
+            self.stats = {"files_processed": 0, "modules_created": 0, "symbols_exported": 0, "errors": 0}
 
         # Normalize repo root
         norm_repo_root = normalize_repo_root(repo_root)

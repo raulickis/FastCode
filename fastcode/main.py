@@ -968,6 +968,9 @@ class FastCode:
         self.multi_repo_mode = True
 
         successfully_indexed = []
+        # Acumuladores Globais para viabilizar GraphRAG Cross-Repo (GAP 4)
+        all_multi_repo_elements = []
+        repo_roots_map = {}
 
         for i, source_info in enumerate(sources):
             source = source_info.get('source')
@@ -1059,35 +1062,12 @@ class FastCode:
                     temp_retriever.build_repo_overview_bm25()
                     self.logger.info(f"Built repo overview BM25 index")
 
-                    # Build and save graph for this repository (Using temporary graph builder)
-                    # We need a fresh graph builder to avoid mixing graphs between repos during this loop
-                    # unless we want to support cross-repo graphs immediately
-                    temp_graph_builder = CodeGraphBuilder(self.config)
-
-                    # Initialize resolvers for precise graph building
-                    repo_root = self.loader.repo_path
-                    temp_module_resolver = None
-                    temp_symbol_resolver = None
-
-                    try:
-                        self.logger.info(f"Initializing resolvers for {repo_name}...")
-                        temp_global_index = GlobalIndexBuilder(self.config)
-                        temp_global_index.build_maps(elements, repo_root)
-                        temp_module_resolver = ModuleResolver(temp_global_index)
-                        temp_symbol_resolver = SymbolResolver(temp_global_index, temp_module_resolver)
-                        self.logger.info(f"Resolvers initialized for {repo_name}")
-                    except Exception as e:
-                        self.logger.warning(f"Failed to initialize resolvers for {repo_name}: {e}")
-                        temp_module_resolver = None
-                        temp_symbol_resolver = None
-
-                    temp_graph_builder.build_graphs(elements, temp_module_resolver, temp_symbol_resolver)
-                    temp_graph_builder.save(repo_name)
-                    self.logger.info(f"Saved graph data for {repo_name}")
-
+                    # GAP 4 FIX: Adiciona os elementos ao acumulador global para construcao do grafo cross-repo
+                    all_multi_repo_elements.extend(elements)
+                    repo_roots_map[repo_name] = self.loader.repo_path
                     successfully_indexed.append(repo_name)
 
-                    self.logger.info(f"Successfully indexed and saved {repo_name}: {len(elements)} elements")
+                    self.logger.info(f"Successfully indexed and queued {repo_name} for global graph: {len(elements)} elements")
                 else:
                     self.logger.warning(f"No vectors generated for {repo_name}")
 
@@ -1113,13 +1093,45 @@ class FastCode:
                     self.logger.info(f"Merged {repo_name} into main store")
                 else:
                     self.logger.warning(f"Failed to merge {repo_name}")
+
+            # =====================================================================
+            # GAP 4 FIX: CROSS-REPO GLOBAL GRAPH CONSTRUCTION
+            # Constrói o "Global Symbol Registry" e exporta para o Neo4j.
+            # =====================================================================
+            if all_multi_repo_elements:
+                self.logger.info("Building Cross-Repo Global Graph and Symbol Registry...")
+                global_graph_builder = CodeGraphBuilder(self.config)
+                self.global_index_builder = GlobalIndexBuilder(self.config)
+                
+                try:
+                    # Ingestão incremental para garantir que a resolução de caminhos 
+                    # respeite o repo_root específico de cada microsserviço
+                    for repo_name, repo_root in repo_roots_map.items():
+                        repo_elements = [e for e in all_multi_repo_elements if e.repo_name == repo_name]
+                        self.global_index_builder.build_maps(repo_elements, repo_root, incremental=True)
+                    
+                    self.module_resolver = ModuleResolver(self.global_index_builder)
+                    self.symbol_resolver = SymbolResolver(self.global_index_builder, self.module_resolver)
+                    
+                    self.logger.info("Global Resolvers initialized successfully. Extracting cross-repo edges...")
+                    global_graph_builder.build_graphs(all_multi_repo_elements, self.module_resolver, self.symbol_resolver)
+                    
+                    # Persiste o grafo global no Neo4j e sobrescreve o builder local
+                    global_graph_builder.save("global_cross_repo")
+                    self.graph_builder = global_graph_builder
+                    self.logger.info("Cross-Repo Global Graph successfully built and saved to Neo4j.")
+                except Exception as e:
+                    self.logger.error(f"Failed to build cross-repo global graph: {e}")
+                    import traceback
+                    self.logger.error(traceback.format_exc())
+            # =====================================================================
         else:
             self.logger.error("No repositories were successfully indexed")
 
         self.repo_indexed = len(successfully_indexed) > 0
         self.repo_loaded = len(successfully_indexed) > 0
 
-        self.logger.info(f"Indexing complete. Each repository saved separately.")
+        self.logger.info(f"Indexing complete. Global graph and vector collections ready.")
 
     def list_repositories(self) -> List[Dict[str, Any]]:
         """
