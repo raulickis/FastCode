@@ -87,14 +87,17 @@ indexing:
 
 # Vector Store Settings
 vector_store:
-  type: "faiss"  # faiss, chromadb, or qdrant
+  type: "qdrant"  # Migrado do FAISS para resolver o Gap de Recall via Payload Pre-filtering
+  url: "http://localhost:6333"  # Use "http://qdrant:6333" se o agente python rodar por dentro da rede Docker
+  collection_name: "fastcode_elements"
+  overview_collection: "fastcode_overviews"
   distance_metric: "cosine"
-  index_type: "HNSW"  # HNSW for fast approximate search
-  ef_construction: 200
-  ef_search: 50
+  
+  # Parametros de Otimizacao HNSW (Qdrant)
+  ef_construct: 100
   m: 16
 
-  # Persistence
+  # Persistence (O Qdrant gerencia o proprio disco, mantido para caches auxiliares legados)
   persist_directory: "./data/vector_store"
 
   # Performance optimization (for web interface)

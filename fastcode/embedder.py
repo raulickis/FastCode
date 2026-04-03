@@ -156,6 +156,22 @@ class CodeEmbedder:
         """
         parts = []
 
+        # --- GAP 2 FIX: Contextual Retrieval ---
+        # Injeta a linhagem estrutural para ancorar o chunk no espaço vetorial
+        repo_name = element.get("repo_name") or "Unknown Repo"
+        rel_path = element.get("relative_path") or element.get("file_path") or "Unknown File"
+        
+        metadata = element.get("metadata", {})
+        class_name = metadata.get("class_name")
+        
+        lineage = f"[Repository: {repo_name} | File: {rel_path}"
+        if class_name:
+            lineage += f" | Class: {class_name}"
+        lineage += "]"
+        
+        parts.append(lineage)
+        # ---------------------------------------
+
         if "type" in element:
             parts.append(f"Type: {element['type']}")
 

@@ -25,10 +25,12 @@ sentence-transformers
 faiss-cpu
 chromadb
 einops
+qdrant-client
 
 # Search & Retrieval
 rank-bm25
 networkx
+neo4j
 
 # LLM Integration
 openai
