@@ -60,12 +60,15 @@ parser:
 
 # Embedding Settings
 embedding:
-  model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"  # Multilingual support (470MB)
-  # model: "sentence-transformers/all-MiniLM-L6-v2"  # Faster download but English only (90MB)
-  # Alternative: "BAAI/bge-large-en-v1.5" for better quality
+  # Opcao 1 (Principal): Qwen/Qwen3-Embedding-0.6B (Contexto: 32k | Score: 75.42 | Nativo, robusto, top tier para codigo)
+  model: "Qwen/Qwen3-Embedding-0.6B"
+  # Opcao 2 (Backup Enterprise): ibm-granite/granite-embedding-english-r2 (Contexto: 8k | Score: 57.22 | Leve, 150M params, ultra-estavel via CPU)
+  # model: "ibm-granite/granite-embedding-english-r2"
+  # Opcao 3 (Backup Pesquisa): codefuse-ai/F2LLM-v2-0.6B (Contexto: 40k | Score: 77.41 | Especialista em codigo, requer validacao de trust_remote_code)
+  # model: "codefuse-ai/F2LLM-v2-0.6B"
   device: "auto"  # "auto" (recommended), "cuda", "mps", or "cpu"
   batch_size: 32
-  max_seq_length: 512
+  max_seq_length: 32768
   normalize_embeddings: true
 
 # Indexing Settings
