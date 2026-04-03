@@ -25,7 +25,7 @@ sentence-transformers
 faiss-cpu
 chromadb
 einops
-qdrant-client
+qdrant-client==1.17.1
 
 # Search & Retrieval
 rank-bm25
